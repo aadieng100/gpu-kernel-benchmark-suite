@@ -1,0 +1,24 @@
+# Build directories
+build/
+bin/
+lib/
+*.out
+*.o
+*.a
+*.so
+*.dylib
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Git-ignored custom explanation & interview defense files (per project spec)
+EXPLICATION_FR.md
+INTERVIEW_DEFENSE_EN.md
+
+# Temporary and log files
+*.log
+scratch/
