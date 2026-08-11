@@ -146,4 +146,4 @@ The repository includes internal comprehensive guides (*git-ignored by design* f
 
 ## 👤 Author & Acknowledgments
 
-Developed by **Abdoul-Ahad Dieng** as a portfolio project demonstrating expertise in CUDA C++, WebGPU WGSL, CPU cache optimization, and GPGPU systems performance engineering.
+Developed by **Abdoul Aziz Dieng** as a portfolio project demonstrating expertise in CUDA C++, WebGPU WGSL, CPU cache optimization, and GPGPU systems performance engineering.
