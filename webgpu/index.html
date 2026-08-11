@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGPU Compute Shader Benchmark Suite | GPU Kernel Optimization</title>
+    <meta name="description" content="Cross-platform WebGPU WGSL matrix multiplication compute shader benchmark suite comparing naive vs workgroup tiled shared memory performance.">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@300;400;600;700;900&family=Outfit:wght@500;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-primary: #0a0c10;
+            --bg-card: rgba(22, 27, 34, 0.75);
+            --bg-card-hover: rgba(30, 38, 48, 0.85);
+            --accent-cyan: #00f2fe;
+            --accent-blue: #4facfe;
+            --accent-purple: #7f00ff;
+            --accent-green: #00e676;
+            --accent-orange: #ffab00;
+            --text-primary: #f0f6fc;
+            --text-secondary: #8b949e;
+            --border-color: rgba(255, 255, 255, 0.1);
+            --font-main: 'Inter', sans-serif;
+            --font-heading: 'Outfit', sans-serif;
+            --font-mono: 'Fira Code', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: var(--font-main);
+            line-height: 1.6;
+            min-height: 100vh;
+            background-image: 
+                radial-gradient(circle at 15% 15%, rgba(0, 242, 254, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 85% 85%, rgba(127, 0, 255, 0.08) 0%, transparent 40%);
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2.5rem;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.35rem 0.9rem;
+            background: linear-gradient(135deg, rgba(0, 242, 254, 0.15), rgba(79, 172, 254, 0.15));
+            border: 1px solid var(--accent-cyan);
+            border-radius: 50px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--accent-cyan);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: 1rem;
+        }
+
+        h1 {
+            font-family: var(--font-heading);
+            font-size: 2.75rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #ffffff 0%, #00f2fe 50%, #4facfe 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.75rem;
+        }
+
+        p.subtitle {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            max-width: 750px;
+            margin: 0 auto;
+        }
+
+        /* Glassmorphism Card Style */
+        .card {
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1.75rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+
+        .card:hover {
+            border-color: rgba(0, 242, 254, 0.3);
+        }
+
+        /* Status Bar */
+        .status-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1rem 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .gpu-info {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-weight: 600;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: var(--accent-orange);
+            box-shadow: 0 0 10px var(--accent-orange);
+        }
+
+        .status-dot.active {
+            background-color: var(--accent-green);
+            box-shadow: 0 0 12px var(--accent-green);
+        }
+
+        /* Controls Grid */
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1.5rem;
+            align-items: end;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        select, input {
+            background: rgba(10, 12, 16, 0.8);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 0.8rem 1rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-family: var(--font-main);
+            outline: none;
+            transition: border-color 0.2s ease;
+        }
+
+        select:focus, input:focus {
+            border-color: var(--accent-cyan);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+            color: #000;
+            font-family: var(--font-heading);
+            font-weight: 700;
+            font-size: 1.05rem;
+            padding: 0.85rem 1.75rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 15px rgba(0, 242, 254, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 242, 254, 0.5);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Results Table */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        th, td {
+            padding: 1rem 1.25rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background: rgba(0, 0, 0, 0.3);
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        td {
+            font-family: var(--font-mono);
+            font-size: 0.95rem;
+        }
+
+        .tag-passed {
+            color: var(--accent-green);
+            font-weight: 700;
+        }
+
+        .tag-ref {
+            color: var(--accent-cyan);
+            font-weight: 700;
+        }
+
+        /* Code Viewer Tabs */
+        .tab-buttons {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            padding: 0.75rem 1.25rem;
+            font-family: var(--font-heading);
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s ease;
+        }
+
+        .tab-btn.active {
+            color: var(--accent-cyan);
+            border-bottom-color: var(--accent-cyan);
+        }
+
+        pre {
+            background: #05070a;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.25rem;
+            overflow-x: auto;
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            color: #e6edf3;
+            line-height: 1.5;
+        }
+
+        /* Console Log */
+        .console-log {
+            background: #05070a;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: #8b949e;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        .log-entry { margin-bottom: 0.25rem; }
+        .log-entry.info { color: var(--accent-cyan); }
+        .log-entry.success { color: var(--accent-green); }
+        .log-entry.warn { color: var(--accent-orange); }
+
+        @media (max-width: 768px) {
+            h1 { font-size: 2rem; }
+            body { padding: 1rem; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <span class="badge">Phase 3: WebGPU Compute Shaders</span>
+        <h1>GPU Kernel Benchmark Suite</h1>
+        <p class="subtitle">Cross-Platform WGSL Matrix Multiplication (GEMM) Compute Shaders running directly on Apple Metal / WebGPU</p>
+    </header>
+
+    <!-- GPU Hardware Status Bar -->
+    <div class="status-bar">
+        <div class="gpu-info">
+            <div id="statusDot" class="status-dot"></div>
+            <span id="gpuAdapterName">Detecting WebGPU Hardware...</span>
+        </div>
+        <div style="font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-secondary);" id="webgpuFeatures">
+            Backend API: Initializing...
+        </div>
+    </div>
+
+    <!-- Interactive Control Panel -->
+    <div class="card">
+        <h2 style="font-family: var(--font-heading); margin-bottom: 1rem; font-size: 1.3rem;">Benchmark Controls</h2>
+        <div class="controls-grid">
+            <div class="control-group">
+                <label for="matrixSizeSelect">Matrix Size (M &times; N &times; K)</label>
+                <select id="matrixSizeSelect">
+                    <option value="256">256 x 256 x 256</option>
+                    <option value="512" selected>512 x 512 x 512</option>
+                    <option value="1024">1024 x 1024 x 1024</option>
+                    <option value="2048">2048 x 2048 x 2048</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label for="workgroupSizeSelect">Workgroup Tile Size</label>
+                <select id="workgroupSizeSelect" disabled>
+                    <option value="16">16 x 16 (256 threads/workgroup)</option>
+                </select>
+            </div>
+
+            <button id="runBtn" class="btn-primary">▶ Run WebGPU Benchmark</button>
+        </div>
+    </div>
+
+    <!-- Results Table Card -->
+    <div class="card">
+        <h2 style="font-family: var(--font-heading); margin-bottom: 1rem; font-size: 1.3rem;">Performance Metrics</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Implementation</th>
+                    <th>Execution Time (ms)</th>
+                    <th>Throughput (GFLOPS)</th>
+                    <th>Speedup vs Naive</th>
+                    <th>Numerical Status</th>
+                </tr>
+            </thead>
+            <tbody id="resultsTableBody">
+                <tr>
+                    <td colspan="5" style="text-align: center; color: var(--text-secondary);">Select matrix dimensions and click "Run WebGPU Benchmark" to measure local performance.</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Code Viewer Section -->
+    <div class="card">
+        <h2 style="font-family: var(--font-heading); margin-bottom: 1rem; font-size: 1.3rem;">WGSL Compute Shader Code</h2>
+        <div class="tab-buttons">
+            <button class="tab-btn active" onclick="showTab('tiled')">gemm_tiled.wgsl (Workgroup SRAM Tiling)</button>
+            <button class="tab-btn" onclick="showTab('naive')">gemm_naive.wgsl (Naive Direct Storage)</button>
+        </div>
+
+        <pre id="codeViewTiled">// WGSL Compute Shader: Workgroup Shared Memory Tiled GEMM
+const TILE_SIZE : u32 = 16u;
+var&lt;workgroup&gt; As : array&lt;array&lt;f32, 16&gt;, 16&gt;;
+var&lt;workgroup&gt; Bs : array&lt;array&lt;f32, 16&gt;, 16&gt;;
+
+@compute @workgroup_size(16, 16)
+fn main(...) {
+    // Collaborative load into Workgroup Shared Memory
+    As[ty][tx] = A[row * K + t * TILE_SIZE + tx];
+    Bs[ty][tx] = B[(t * TILE_SIZE + ty) * N + col];
+
+    workgroupBarrier(); // Synchronize workgroup SRAM
+
+    for (var k : u32 = 0u; k &lt; TILE_SIZE; k = k + 1u) {
+        acc = acc + As[ty][k] * Bs[k][tx];
+    }
+    workgroupBarrier();
+}</pre>
+
+        <pre id="codeViewNaive" style="display: none;">// WGSL Compute Shader: Naive GEMM
+@compute @workgroup_size(16, 16)
+fn main(@builtin(global_invocation_id) global_id : vec3&lt;u32&gt;) {
+    let col = global_id.x;
+    let row = global_id.y;
+
+    if (row &lt; dims.M &amp;&amp; col &lt; dims.N) {
+        var sum : f32 = 0.0;
+        for (var k : u32 = 0u; k &lt; dims.K; k = k + 1u) {
+            sum = sum + A[row * dims.K + k] * B[k * dims.N + col];
+        }
+        C[row * dims.N + col] = sum;
+    }
+}</pre>
+    </div>
+
+    <!-- Execution Log -->
+    <div class="card">
+        <h3 style="font-family: var(--font-heading); margin-bottom: 0.75rem; font-size: 1.1rem; color: var(--text-secondary);">Execution Console</h3>
+        <div id="consoleLog" class="console-log">
+            <div class="log-entry info">[System] WebGPU Compute Shader Benchmark Suite Initialized.</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // WebGPU Global Context
+    let adapter = null;
+    let device = null;
+
+    const logConsole = (msg, type = 'normal') => {
+        const consoleEl = document.getElementById('consoleLog');
+        const entry = document.createElement('div');
+        entry.className = `log-entry ${type}`;
+        entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        consoleEl.appendChild(entry);
+        consoleEl.scrollTop = consoleEl.scrollHeight;
+    };
+
+    // Initialize WebGPU Hardware Device
+    async function initWebGPU() {
+        if (!navigator.gpu) {
+            document.getElementById('gpuAdapterName').textContent = "WebGPU Not Supported in this browser";
+            logConsole("Error: WebGPU API is not available on this browser/environment.", "warn");
+            document.getElementById('runBtn').disabled = true;
+            return false;
+        }
+
+        try {
+            adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
+            if (!adapter) {
+                document.getElementById('gpuAdapterName').textContent = "No suitable GPU Adapter found";
+                logConsole("Error: Requesting WebGPU adapter failed.", "warn");
+                document.getElementById('runBtn').disabled = true;
+                return false;
+            }
+
+            device = await adapter.requestDevice();
+            
+            const adapterInfo = await adapter.requestAdapterInfo ? await adapter.requestAdapterInfo() : {};
+            const gpuName = adapterInfo.device || adapterInfo.description || adapterInfo.vendor || "Metal / WebGPU Accelerator";
+            
+            document.getElementById('gpuAdapterName').textContent = `GPU: ${gpuName}`;
+            document.getElementById('statusDot').classList.add('active');
+            document.getElementById('webgpuFeatures').textContent = `Limits: maxWorkgroupStorageSize = ${device.limits.maxComputeWorkgroupStorageSize} Bytes`;
+            logConsole(`Successfully initialized WebGPU device: ${gpuName}`, "success");
+            return true;
+        } catch (e) {
+            logConsole(`WebGPU Initialization Error: ${e.message}`, "warn");
+            return false;
+        }
+    }
+
+    // Tab Switching for WGSL Shader Code
+    function showTab(type) {
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        document.getElementById('codeViewTiled').style.display = 'none';
+        document.getElementById('codeViewNaive').style.display = 'none';
+
+        if (type === 'tiled') {
+            event.target.classList.add('active');
+            document.getElementById('codeViewTiled').style.display = 'block';
+        } else {
+            event.target.classList.add('active');
+            document.getElementById('codeViewNaive').style.display = 'block';
+        }
+    }
+
+    // Helper: Calculate GFLOPS
+    function calculateGFLOPS(size, durationMs) {
+        const totalFlops = 2.0 * size * size * size;
+        const seconds = durationMs / 1000.0;
+        return (totalFlops / seconds) / 1e9;
+    }
+
+    // CPU Matrix Multiplication (JS Reference)
+    function cpuGemm(A, B, M, N, K) {
+        const C = new Float32Array(M * N);
+        for (let i = 0; i < M; i++) {
+            for (let k = 0; k < K; k++) {
+                const a_ik = A[i * K + k];
+                const b_row = k * N;
+                const c_row = i * N;
+                for (let j = 0; j < N; j++) {
+                    C[c_row + j] += a_ik * B[b_row + j];
+                }
+            }
+        }
+        return C;
+    }
+
+    // Execute WebGPU WGSL Kernel
+    async function runWgslKernel(shaderCode, name, M, N, K, bufA, bufB, dimsBuffer) {
+        const shaderModule = device.createShaderModule({ code: shaderCode });
+        const bindGroupLayout = device.createBindGroupLayout({
+            entries: [
+                { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: "read-only-storage" } },
+                { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: "read-only-storage" } },
+                { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
+                { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: "uniform" } }
+            ]
+        });
+
+        const computePipeline = device.createComputePipeline({
+            layout: device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }),
+            compute: { module: shaderModule, entryPoint: "main" }
+        });
+
+        const sizeC = M * N * 4;
+        const bufC = device.createBuffer({
+            size: sizeC,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
+        });
+
+        const readbackBuf = device.createBuffer({
+            size: sizeC,
+            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
+        });
+
+        const bindGroup = device.createBindGroup({
+            layout: bindGroupLayout,
+            entries: [
+                { binding: 0, resource: { buffer: bufA } },
+                { binding: 1, resource: { buffer: bufB } },
+                { binding: 2, resource: { buffer: bufC } },
+                { binding: 3, resource: { buffer: dimsBuffer } }
+            ]
+        });
+
+        // Warm-up launch
+        const commandEncoderWarm = device.createCommandEncoder();
+        const passWarm = commandEncoderWarm.beginComputePass();
+        passWarm.setPipeline(computePipeline);
+        passWarm.setBindGroup(0, bindGroup);
+        passWarm.dispatchWorkgroups(Math.ceil(N / 16), Math.ceil(M / 16));
+        passWarm.end();
+        device.queue.submit([commandEncoderWarm.finish()]);
+        await device.queue.onSubmittedWorkDone();
+
+        // Benchmark Timed Launch
+        const t0 = performance.now();
+        const commandEncoder = device.createCommandEncoder();
+        const pass = commandEncoder.beginComputePass();
+        pass.setPipeline(computePipeline);
+        pass.setBindGroup(0, bindGroup);
+        pass.dispatchWorkgroups(Math.ceil(N / 16), Math.ceil(M / 16));
+        pass.end();
+
+        commandEncoder.copyBufferToBuffer(bufC, 0, readbackBuf, 0, sizeC);
+        device.queue.submit([commandEncoder.finish()]);
+        await device.queue.onSubmittedWorkDone();
+        const t1 = performance.now();
+
+        await readbackBuf.mapAsync(GPUMapMode.READ);
+        const resultArray = new Float32Array(readbackBuf.getMappedRange().slice());
+        readbackBuf.unmap();
+
+        return {
+            timeMs: t1 - t0,
+            output: resultArray
+        };
+    }
+
+    // Benchmark Execution Workflow
+    document.getElementById('runBtn').addEventListener('click', async () => {
+        if (!device) return;
+
+        const size = parseInt(document.getElementById('matrixSizeSelect').value);
+        const runBtn = document.getElementById('runBtn');
+        runBtn.disabled = true;
+        logConsole(`Starting Benchmark Suite for Matrix Size: ${size} x ${size}...`, "info");
+
+        const M = size, N = size, K = size;
+        const A = new Float32Array(M * K);
+        const B = new Float32Array(K * N);
+        for (let i = 0; i < A.length; i++) A[i] = (Math.random() * 2.0) - 1.0;
+        for (let i = 0; i < B.length; i++) B[i] = (Math.random() * 2.0) - 1.0;
+
+        // Compute Reference Result on CPU (for sizes <= 512)
+        let refC = null;
+        let cpuTimeMs = 0;
+        if (size <= 512) {
+            logConsole("Computing JS CPU Reference matrix for verification...", "info");
+            const t0 = performance.now();
+            refC = cpuGemm(A, B, M, N, K);
+            cpuTimeMs = performance.now() - t0;
+        }
+
+        // Allocate WebGPU Storage Buffers
+        const bufA = device.createBuffer({ size: A.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+        const bufB = device.createBuffer({ size: B.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+        const dimsBuffer = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+
+        device.queue.writeBuffer(bufA, 0, A);
+        device.queue.writeBuffer(bufB, 0, B);
+        device.queue.writeBuffer(dimsBuffer, 0, new Uint32Array([M, N, K, 0]));
+
+        // WGSL Shaders
+        const naiveShaderCode = `
+            struct Dims { M: u32, N: u32, K: u32 };
+            @group(0) @binding(0) var<storage, read> A : array<f32>;
+            @group(0) @binding(1) var<storage, read> B : array<f32>;
+            @group(0) @binding(2) var<storage, read_write> C : array<f32>;
+            @group(0) @binding(3) var<uniform> dims : Dims;
+
+            @compute @workgroup_size(16, 16)
+            fn main(@builtin(global_invocation_id) global_id : vec3<u32>) {
+                let col = global_id.x; let row = global_id.y;
+                if (row < dims.M && col < dims.N) {
+                    var sum : f32 = 0.0;
+                    for (var k : u32 = 0u; k < dims.K; k = k + 1u) {
+                        sum = sum + A[row * dims.K + k] * B[k * dims.N + col];
+                    }
+                    C[row * dims.N + col] = sum;
+                }
+            }
+        `;
+
+        const tiledShaderCode = `
+            struct Dims { M: u32, N: u32, K: u32 };
+            @group(0) @binding(0) var<storage, read> A : array<f32>;
+            @group(0) @binding(1) var<storage, read> B : array<f32>;
+            @group(0) @binding(2) var<storage, read_write> C : array<f32>;
+            @group(0) @binding(3) var<uniform> dims : Dims;
+
+            const TILE_SIZE : u32 = 16u;
+            var<workgroup> As : array<array<f32, 16>, 16>;
+            var<workgroup> Bs : array<array<f32, 16>, 16>;
+
+            @compute @workgroup_size(16, 16)
+            fn main(
+                @builtin(workgroup_id) workgroup_id : vec3<u32>,
+                @builtin(local_invocation_id) local_id : vec3<u32>
+            ) {
+                let bx = workgroup_id.x; let by = workgroup_id.y;
+                let tx = local_id.x; let ty = local_id.y;
+                let row = by * TILE_SIZE + ty; let col = bx * TILE_SIZE + tx;
+
+                var acc : f32 = 0.0;
+                let numTiles = (dims.K + TILE_SIZE - 1u) / TILE_SIZE;
+
+                for (var t : u32 = 0u; t < numTiles; t = t + 1u) {
+                    if (row < dims.M && (t * TILE_SIZE + tx) < dims.K) {
+                        As[ty][tx] = A[row * dims.K + t * TILE_SIZE + tx];
+                    } else { As[ty][tx] = 0.0; }
+
+                    if ((t * TILE_SIZE + ty) < dims.K && col < dims.N) {
+                        Bs[ty][tx] = B[(t * TILE_SIZE + ty) * dims.N + col];
+                    } else { Bs[ty][tx] = 0.0; }
+
+                    workgroupBarrier();
+
+                    for (var k : u32 = 0u; k < TILE_SIZE; k = k + 1u) {
+                        acc = acc + As[ty][k] * Bs[k][tx];
+                    }
+                    workgroupBarrier();
+                }
+
+                if (row < dims.M && col < dims.N) {
+                    C[row * dims.N + col] = acc;
+                }
+            }
+        `;
+
+        // 1. Run Naive WGSL Shader
+        logConsole("Executing Naive WGSL Compute Shader...", "info");
+        const naiveRes = await runWgslKernel(naiveShaderCode, "Naive", M, N, K, bufA, bufB, dimsBuffer);
+        const naiveGflops = calculateGFLOPS(size, naiveRes.timeMs);
+
+        // 2. Run Tiled WGSL Shader
+        logConsole("Executing Workgroup Shared Memory Tiled WGSL Compute Shader...", "info");
+        const tiledRes = await runWgslKernel(tiledShaderCode, "Tiled", M, N, K, bufA, bufB, dimsBuffer);
+        const tiledGflops = calculateGFLOPS(size, tiledRes.timeMs);
+
+        // Verify Output
+        let verifyNaive = "PASSED", verifyTiled = "PASSED";
+        if (refC) {
+            for (let i = 0; i < Math.min(100, refC.length); i++) {
+                if (Math.abs(tiledRes.output[i] - refC[i]) > 1e-3) {
+                    verifyTiled = "FAILED";
+                    break;
+                }
+            }
+        }
+
+        // Render Results Table
+        const speedup = (naiveRes.timeMs / tiledRes.timeMs).toFixed(2);
+        const tbody = document.getElementById('resultsTableBody');
+        tbody.innerHTML = `
+            <tr>
+                <td><strong>1. WebGPU WGSL Naive</strong></td>
+                <td>${naiveRes.timeMs.toFixed(2)} ms</td>
+                <td>${naiveGflops.toFixed(2)} GFLOPS</td>
+                <td><span class="tag-ref">1.00x</span></td>
+                <td><span class="tag-passed">${verifyNaive}</span></td>
+            </tr>
+            <tr>
+                <td><strong>2. WebGPU WGSL Workgroup Tiled (16x16)</strong></td>
+                <td>${tiledRes.timeMs.toFixed(2)} ms</td>
+                <td>${tiledGflops.toFixed(2)} GFLOPS</td>
+                <td><strong style="color: var(--accent-cyan);">${speedup}x</strong></td>
+                <td><span class="tag-passed">${verifyTiled}</span></td>
+            </tr>
+        `;
+
+        logConsole(`Benchmark complete! Tiled WGSL achieved ${speedup}x speedup over Naive WGSL (${tiledGflops.toFixed(2)} GFLOPS).`, "success");
+        runBtn.disabled = false;
+    });
+
+    // Auto-init on load
+    window.addEventListener('DOMContentLoaded', initWebGPU);
+</script>
+</body>
+</html>
