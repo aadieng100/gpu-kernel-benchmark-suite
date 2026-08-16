@@ -79,7 +79,7 @@ This project demonstrates step-by-step kernel optimization techniques:
 ```
 gpu-kernel-benchmark-suite/
 ├── CMakeLists.txt                # C++20 & optional CUDA CMake configuration
-├── .gitignore                    # Git rules (ignoring build/, private docs)
+├── .gitignore                    # Git rules (ignoring build/, local artifacts)
 ├── colab_runner.ipynb            # 1-Click Google Colab Jupyter Notebook
 ├── include/
 │   ├── matrix_utils.hpp          # Matrix utilities, random init & GFLOPS timer
@@ -133,16 +133,6 @@ python3 -m http.server 8080 --directory webgpu
 ./scripts/profile_runner.py
 # Outputs: benchmark_results.json and benchmark_results.csv
 ```
-
----
-
-## 📜 Technical Defense & System Documentation
-
-The repository includes internal comprehensive guides (*git-ignored by design* for technical interview alignment):
-- `EXPLICATION_FR.md`: In-depth French synthesis of SIMT execution, Warp scheduling, SRAM tiling, and Roofline Model metrics.
-- `INTERVIEW_DEFENSE_EN.md`: English Q&A technical defense manual featuring 16+ senior GPU systems interview questions.
-
----
 
 ## 👤 Author & Acknowledgments
 
